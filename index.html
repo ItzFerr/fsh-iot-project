@@ -129,7 +129,7 @@
 <div class="toggle-dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow-sm transition-transform duration-300"></div>
 </div>
 </label>
-<span class="font-medium text-lg text-slate-700" id="lightStatus">Inactive</span>
+<span class="font-medium text-lg text-slate-700" id="lightStatus">OFF</span>
 </div>
 </section>
 <!-- END: Room Light Control -->
@@ -195,6 +195,23 @@
         ping: 'ferdysmarthome/ping'
     };
 
+    // ========== STATE MANAGEMENT ==========
+    // Load dari localStorage saat pertama buka
+    let currentState = {
+        relay: localStorage.getItem('relayState') || 'OFF',
+        suhu: localStorage.getItem('suhu') || '--',
+        humidity: localStorage.getItem('humidity') || '--'
+    };
+
+    // Update UI dari localStorage
+    function updateUIFromState() {
+        document.getElementById('lightStatus').textContent = currentState.relay;
+        document.getElementById('lightToggle').checked = (currentState.relay === 'ON');
+        document.getElementById('temperature').innerHTML = (currentState.suhu !== '--' ? currentState.suhu + '°C' : '--°C');
+        document.getElementById('humidity').innerHTML = (currentState.humidity !== '--' ? currentState.humidity + '%' : '--%');
+    }
+    updateUIFromState();
+
     // ========== KONEKSI MQTT ==========
     const options = {
         clientId: clientId,
@@ -231,13 +248,19 @@
         const msg = message.toString();
         
         if (topic === topics.status) {
+            currentState.relay = msg;
+            localStorage.setItem('relayState', msg);
             document.getElementById('lightStatus').textContent = msg;
             document.getElementById('lightToggle').checked = (msg === 'ON');
         }
         else if (topic === topics.suhu) {
+            currentState.suhu = msg;
+            localStorage.setItem('suhu', msg);
             document.getElementById('temperature').innerHTML = msg + '°C';
         }
         else if (topic === topics.humidity) {
+            currentState.humidity = msg;
+            localStorage.setItem('humidity', msg);
             document.getElementById('humidity').innerHTML = msg + '%';
         }
     });
@@ -287,21 +310,32 @@
 
     // Handle light toggle
     document.getElementById('lightToggle').addEventListener('change', function(e) {
-      const label = document.getElementById('lightStatus');
-      const relayState = e.target.checked ? 'ON' : 'OFF';
-      label.textContent = e.target.checked ? 'Active' : 'Inactive';
+      const newState = e.target.checked ? 'ON' : 'OFF';
+      
+      // Optimistic update
+      document.getElementById('lightStatus').textContent = newState;
+      currentState.relay = newState;
+      localStorage.setItem('relayState', newState);
       
       // Kirim ke MQTT
-      client.publish(topics.relay, relayState);
+      client.publish(topics.relay, newState);
     });
 
     // Dark mode toggle
     const themeToggle = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
     
+    // Load theme dari localStorage
+    if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark');
+        themeIcon.textContent = 'dark_mode';
+    }
+    
     themeToggle.addEventListener('click', function() {
       document.body.classList.toggle('dark');
-      themeIcon.textContent = document.body.classList.contains('dark') ? 'dark_mode' : 'light_mode';
+      const isDark = document.body.classList.contains('dark');
+      themeIcon.textContent = isDark ? 'dark_mode' : 'light_mode';
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
     });
 
     // Auto refresh data (cadangan)
