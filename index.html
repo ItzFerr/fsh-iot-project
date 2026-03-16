@@ -3,110 +3,186 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>FSH IoT Remote | MQTT</title>
-<!-- Tailwind CSS -->
-<script src="https://cdn.tailwindcss.com"></script>
+<title>Ferdy Smart Home | IoT</title>
+<!-- BEGIN: Scripts and Configuration -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'smart-bg': '#f8fafc',
+            'smart-card': '#ffffff',
+            'smart-accent': '#3b82f6',
+            'smart-green': '#10b981'
+          }
+        }
+      }
+    }
+  </script>
+<!-- END: Scripts and Configuration -->
 <!-- MQTT.js untuk WebSocket -->
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-<!-- Material Icons -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap" rel="stylesheet"/>
+<style data-purpose="custom-animations">
+    .toggle-dot {
+      transition: transform 0.3s ease-in-out;
+    }
+    input:checked ~ .toggle-dot {
+      transform: translateX(100%);
+    }
+    input:checked ~ .toggle-bg {
+      background-color: #10b981 !important;
+    }
+  </style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <style>
-    .toggle-dot { transition: transform 0.3s ease-in-out; }
-    input:checked ~ .toggle-dot { transform: translateX(100%); }
-    input:checked ~ .toggle-bg { background-color: #10b981 !important; }
-    
-    body.dark { background-color: #1e293b; color: #f1f5f9; }
-    body.dark .bg-white { background-color: #1e293b !important; }
-    body.dark .bg-slate-50 { background-color: #0f172a !important; }
-    body.dark .toggle-bg { background-color: #475569; }
-    .connection-status { transition: all 0.3s; }
-</style>
+    /* Dark mode styles */
+    body.dark {
+      background-color: #1e293b;
+      color: #f1f5f9;
+    }
+    body.dark .bg-smart-card {
+      background-color: #334155;
+      border-color: #475569;
+    }
+    body.dark .text-slate-900 {
+      color: #f1f5f9;
+    }
+    body.dark .text-slate-500 {
+      color: #94a3b8;
+    }
+    body.dark .text-slate-700 {
+      color: #cbd5e1;
+    }
+    body.dark .bg-white {
+      background-color: #1e293b;
+    }
+    body.dark .border-slate-200 {
+      border-color: #475569;
+    }
+    body.dark .bg-slate-50 {
+      background-color: #1e293b;
+    }
+    body.dark .hover\:bg-slate-100:hover {
+      background-color: #0f172a;
+    }
+    body.dark .bg-orange-50 {
+      background-color: #422006;
+    }
+    body.dark .text-orange-500 {
+      color: #f97316;
+    }
+    body.dark .bg-slate-200 {
+      background-color: #475569;
+    }
+    body.dark .toggle-bg {
+      background-color: #475569;
+    }
+    body.dark input:checked ~ .toggle-bg {
+      background-color: #10b981 !important;
+    }
+    body.dark .toggle-dot {
+      background-color: #f1f5f9;
+    }
+  </style>
 </head>
-<body class="bg-slate-50 p-4 min-h-screen">
-<div class="max-w-4xl mx-auto">
-    <!-- Header -->
-    <div class="flex justify-between items-start mb-6">
-        <div>
-            <h1 class="text-4xl font-bold">FSH IoT Remote</h1>
-            <div class="flex items-center gap-2 mt-2">
-                <span class="text-sm" id="mqttStatus">MQTT: Connecting...</span>
-                <span class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" id="statusLed"></span>
-            </div>
-            <div class="text-xs text-gray-500 mt-1">
-                <span>ferdysmarthome.vercel.app</span>
-            </div>
-        </div>
-        <button class="bg-white p-2 rounded-lg shadow" id="themeToggle">
-            <span class="material-symbols-outlined" id="themeIcon">light_mode</span>
-        </button>
-    </div>
-
-    <!-- Room Light Control -->
-    <div class="bg-white rounded-2xl p-6 shadow-lg mb-6">
-        <div class="flex justify-between items-start mb-4">
-            <div>
-                <h2 class="text-xl font-semibold">Room Light</h2>
-                <p class="text-sm text-gray-500">Main Bedroom Lighting</p>
-            </div>
-            <div class="bg-orange-100 p-2 rounded-full">
-                <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-width="2"/>
-                </svg>
-            </div>
-        </div>
-        <div class="flex items-center gap-4">
-            <label class="relative inline-block w-14 h-8">
-                <input type="checkbox" class="opacity-0 w-0 h-0" id="lightToggle">
-                <span class="toggle-bg absolute cursor-pointer inset-0 bg-gray-300 rounded-full transition-colors"></span>
-                <span class="toggle-dot absolute left-1 top-1 w-6 h-6 bg-white rounded-full shadow"></span>
-            </label>
-            <span class="font-medium text-lg" id="lightStatus">Inactive</span>
-        </div>
-    </div>
-
-    <!-- Sensor Data -->
-    <div class="grid grid-cols-2 gap-4 mb-6">
-        <div class="bg-white rounded-2xl p-4 shadow-lg">
-            <div class="text-orange-600 mb-2">
-                <span class="material-symbols-outlined text-3xl">thermostat</span>
-            </div>
-            <p class="text-sm text-gray-500">Temperature</p>
-            <p class="text-2xl font-bold" id="temperature">--°C</p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 shadow-lg">
-            <div class="text-blue-600 mb-2">
-                <span class="material-symbols-outlined text-3xl">water_drop</span>
-            </div>
-            <p class="text-sm text-gray-500">Humidity</p>
-            <p class="text-2xl font-bold" id="humidity">--%</p>
-        </div>
-    </div>
-
-    <!-- LCD Display Control -->
-    <div class="bg-white rounded-2xl p-6 shadow-lg">
-        <div class="mb-4">
-            <h2 class="text-xl font-semibold">LCD Display</h2>
-            <p class="text-sm text-gray-500">Select the content to display on the Oled LCD</p>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-            <button class="flex items-center justify-center gap-2 p-4 rounded-xl border-2 border-transparent bg-slate-50 hover:bg-slate-100 transition-all" id="btn-robot-eyes">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"/>
-                    <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-width="2"/>
-                </svg>
-                <span class="font-medium">Robot Eyes</span>
-            </button>
-            <button class="flex items-center justify-center gap-2 p-4 rounded-xl border-2 border-smart-accent bg-smart-accent/5" id="btn-temp-humidity">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-width="2"/>
-                </svg>
-                <span class="font-medium text-smart-accent">Temp & Humidity</span>
-            </button>
-        </div>
-    </div>
+<body class="bg-smart-bg text-slate-900 font-sans min-h-screen">
+<div class="max-w-4xl mx-auto p-6 md:p-10">
+<!-- BEGIN: Header -->
+<header class="mb-10 flex flex-row justify-between items-start" data-purpose="page-header">
+<div class="flex flex-col">
+<h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">FSH IoT</h1>
+<div class="flex items-center mt-2">
+<span class="text-slate-500 mr-2" id="mqttStatus">MQTT: Connecting...</span>
+<span class="w-3 h-3 bg-yellow-500 rounded-full animate-pulse" id="statusLed"></span>
 </div>
-
-<script>
+<div class="text-xs text-slate-400 mt-1">
+<span>Remote: ferdysmarthome.vercel.app</span>
+</div>
+</div>
+<button aria-label="Toggle Theme" class="bg-white p-2.5 rounded-xl hover:bg-slate-100 transition-colors border border-slate-200 shadow-sm flex items-center justify-center" id="themeToggle">
+<span class="material-symbols-outlined text-slate-700" id="themeIcon">light_mode</span>
+</button>
+</header>
+<!-- END: Header -->
+<main class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- BEGIN: Room Light Control -->
+<section class="bg-smart-card rounded-3xl p-8 flex flex-col justify-between shadow-xl border border-slate-200" data-purpose="light-control-section">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h2 class="text-xl font-semibold text-slate-900">Room Light</h2>
+<p class="text-slate-500 text-sm mt-1">Main Bedroom Lighting</p>
+</div>
+<!-- Lightbulb Icon -->
+<div class="bg-orange-50 p-3 rounded-full">
+<svg class="h-6 w-6 text-orange-500" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.663 17h4.674a1 1 0 00.922-.606l.7-1.747a11.01 11.01 0 00-7.918 0l.7 1.747a1 1 0 00.922.606zM12 21V19m-3-4.5c.5.5.5 1.5.5 1.5h5s0-1 .5-1.5M12 3a9 9 0 00-9 9c0 2.5 1.05 4.75 2.75 6.25m12.5 0C19.95 16.75 21 14.5 21 12a9 9 0 00-9-9z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+<!-- Toggle Switch -->
+<div class="flex items-center space-x-4">
+<label class="flex items-center cursor-pointer" for="lightToggle">
+<div class="relative">
+<input class="sr-only" id="lightToggle" type="checkbox">
+<div class="toggle-bg block bg-slate-200 w-14 h-8 rounded-full transition-colors duration-300"></div>
+<div class="toggle-dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow-sm transition-transform duration-300"></div>
+</div>
+</label>
+<span class="font-medium text-lg text-slate-700" id="lightStatus">Inactive</span>
+</div>
+</section>
+<!-- END: Room Light Control -->
+<!-- BEGIN: Environment Stats -->
+<section class="grid grid-cols-1 gap-4" data-purpose="environment-stats">
+<!-- Temperature Card -->
+<div class="bg-smart-card rounded-3xl p-6 flex items-center border border-slate-200 shadow-lg">
+<div class="bg-orange-500/10 p-4 rounded-2xl mr-4"><span class="material-symbols-outlined text-orange-600 text-3xl">thermostat</span></div>
+<div>
+<p class="text-slate-500 text-sm">Temperature</p>
+<h3 class="text-2xl font-bold text-slate-900" id="temperature">--°C</h3>
+</div>
+</div>
+<!-- Humidity Card -->
+<div class="bg-smart-card rounded-3xl p-6 flex items-center border border-slate-200 shadow-lg">
+<div class="bg-blue-500/10 p-4 rounded-2xl mr-4"><span class="material-symbols-outlined text-blue-600 text-3xl">water_drop</span></div>
+<div>
+<p class="text-slate-500 text-sm">Humidity</p>
+<h3 class="text-2xl font-bold text-slate-900" id="humidity">--%</h3>
+</div>
+</div>
+</section>
+<!-- END: Environment Stats -->
+<!-- BEGIN: LCD Display Control -->
+<section class="md:col-span-2 bg-smart-card rounded-3xl p-8 border border-slate-200 shadow-xl" data-purpose="lcd-display-control">
+<div class="mb-6">
+<h2 class="text-xl font-semibold text-slate-900">LCD Display</h2>
+<p class="text-slate-500 text-sm mt-1">Select the content to display on the Oled LCD</p>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<!-- Mode: Robot Eyes -->
+<button class="flex items-center justify-center space-x-3 p-6 rounded-2xl border-2 border-transparent bg-slate-50 hover:bg-slate-100 transition-all duration-200 focus:outline-none focus:border-smart-accent group" data-purpose="mode-selector-robot" id="btn-robot-eyes" onclick="selectDisplayMode('robot')">
+<svg class="h-6 w-6 text-slate-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-medium text-slate-700">Robot Eyes</span>
+</button>
+<!-- Mode: Temp & Humidity -->
+<button class="flex items-center justify-center space-x-3 p-6 rounded-2xl border-2 border-smart-accent bg-smart-accent/5 hover:bg-smart-accent/10 transition-all duration-200 focus:outline-none" data-purpose="mode-selector-data" id="btn-temp-humidity" onclick="selectDisplayMode('data')">
+<svg class="h-6 w-6 text-smart-accent" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-medium text-smart-accent">Temp &amp; Humidity</span>
+</button>
+</div>
+</section>
+<!-- END: LCD Display Control -->
+</main>
+<!-- END: Footer Info -->
+</div>
+<!-- BEGIN: Interactive Logic -->
+<script data-purpose="dashboard-logic">
     // ========== KONFIGURASI MQTT ==========
     const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
     const clientId = 'webclient_' + Math.random().toString(36).substr(2, 9);
@@ -119,30 +195,6 @@
         ping: 'ferdysmarthome/ping'
     };
 
-    // ========== UI ELEMENTS ==========
-    const mqttStatus = document.getElementById('mqttStatus');
-    const statusLed = document.getElementById('statusLed');
-    const lightToggle = document.getElementById('lightToggle');
-    const lightStatus = document.getElementById('lightStatus');
-    const temperature = document.getElementById('temperature');
-    const humidity = document.getElementById('humidity');
-
-    // ========== STATE (dari localStorage) ==========
-    let currentState = {
-        relay: localStorage.getItem('relayState') || 'OFF',
-        suhu: localStorage.getItem('suhu') || '--',
-        humidity: localStorage.getItem('humidity') || '--'
-    };
-
-    // Update UI dari localStorage
-    function updateUIFromState() {
-        lightStatus.textContent = currentState.relay;
-        lightToggle.checked = (currentState.relay === 'ON');
-        temperature.innerHTML = (currentState.suhu !== '--' ? currentState.suhu + '°C' : '--°C');
-        humidity.innerHTML = (currentState.humidity !== '--' ? currentState.humidity + '%' : '--%');
-    }
-    updateUIFromState();
-
     // ========== KONEKSI MQTT ==========
     const options = {
         clientId: clientId,
@@ -152,16 +204,14 @@
         keepalive: 30
     };
 
-    console.log('Connecting to MQTT broker...');
     const client = mqtt.connect(brokerUrl, options);
 
     client.on('connect', () => {
-        console.log('✅ Connected to MQTT');
-        mqttStatus.textContent = 'MQTT: Connected';
-        mqttStatus.className = 'text-sm text-green-600';
-        statusLed.className = 'w-2 h-2 bg-green-500 rounded-full animate-pulse';
+        document.getElementById('mqttStatus').textContent = 'MQTT: Connected';
+        document.getElementById('mqttStatus').className = 'text-slate-500 mr-2 text-green-600';
+        document.getElementById('statusLed').className = 'w-3 h-3 bg-smart-green rounded-full animate-pulse';
         
-        // Subscribe ke semua topic
+        // Subscribe ke topic
         client.subscribe(topics.status);
         client.subscribe(topics.suhu);
         client.subscribe(topics.humidity);
@@ -170,112 +220,97 @@
         client.publish(topics.ping, 'status_request');
     });
 
-    client.on('reconnect', () => {
-        console.log('Reconnecting...');
-        mqttStatus.textContent = 'MQTT: Reconnecting';
-        mqttStatus.className = 'text-sm text-yellow-600';
-        statusLed.className = 'w-2 h-2 bg-yellow-500 rounded-full animate-pulse';
-    });
-
     client.on('close', () => {
-        console.log('Disconnected');
-        mqttStatus.textContent = 'MQTT: Disconnected';
-        mqttStatus.className = 'text-sm text-red-600';
-        statusLed.className = 'w-2 h-2 bg-red-500 rounded-full animate-pulse';
+        document.getElementById('mqttStatus').textContent = 'MQTT: Disconnected';
+        document.getElementById('mqttStatus').className = 'text-slate-500 mr-2';
+        document.getElementById('statusLed').className = 'w-3 h-3 bg-gray-400 rounded-full animate-pulse';
     });
 
     // ========== HANDLE INCOMING MESSAGES ==========
     client.on('message', (topic, message) => {
         const msg = message.toString();
-        console.log('📩 Received:', topic, msg);
         
         if (topic === topics.status) {
-            currentState.relay = msg;
-            localStorage.setItem('relayState', msg);
-            lightStatus.textContent = msg;
-            lightToggle.checked = (msg === 'ON');
+            document.getElementById('lightStatus').textContent = msg;
+            document.getElementById('lightToggle').checked = (msg === 'ON');
         }
         else if (topic === topics.suhu) {
-            currentState.suhu = msg;
-            localStorage.setItem('suhu', msg);
-            temperature.innerHTML = msg + '°C';
+            document.getElementById('temperature').innerHTML = msg + '°C';
         }
         else if (topic === topics.humidity) {
-            currentState.humidity = msg;
-            localStorage.setItem('humidity', msg);
-            humidity.innerHTML = msg + '%';
+            document.getElementById('humidity').innerHTML = msg + '%';
         }
     });
 
-    // ========== SEND RELAY COMMAND ==========
-    lightToggle.addEventListener('change', (e) => {
-        const newState = e.target.checked ? 'ON' : 'OFF';
-        
-        // Optimistic update
-        lightStatus.textContent = newState;
-        currentState.relay = newState;
-        localStorage.setItem('relayState', newState);
-        
-        // Kirim ke MQTT
-        client.publish(topics.relay, newState);
-        console.log('📤 Sent:', topics.relay, newState);
-    });
+    // ========== FUNGSI-FUNGSI UI ==========
+    function selectDisplayMode(mode) {
+      const btnRobot = document.getElementById('btn-robot-eyes');
+      const btnData = document.getElementById('btn-temp-humidity');
+      const spanRobot = btnRobot.querySelector('span');
+      const spanData = btnData.querySelector('span');
+      const svgRobot = btnRobot.querySelector('svg');
+      const svgData = btnData.querySelector('svg');
+      
+      const unselectedClasses = ['border-transparent', 'bg-slate-50', 'hover:bg-slate-100'];
+      const selectedClasses = ['border-smart-accent', 'bg-smart-accent/5', 'hover:bg-smart-accent/10'];
 
-    // ========== DARK MODE ==========
-    const themeToggle = document.getElementById('themeToggle');
-    const themeIcon = document.getElementById('themeIcon');
-    
-    if (localStorage.getItem('theme') === 'dark') {
-        document.body.classList.add('dark');
-        themeIcon.textContent = 'dark_mode';
-    }
-    
-    themeToggle.addEventListener('click', () => {
-        document.body.classList.toggle('dark');
-        const isDark = document.body.classList.contains('dark');
-        themeIcon.textContent = isDark ? 'dark_mode' : 'light_mode';
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    });
-
-    // ========== LCD MODE SELECTOR ==========
-    const btnRobot = document.getElementById('btn-robot-eyes');
-    const btnData = document.getElementById('btn-temp-humidity');
-    const spanRobot = btnRobot.querySelector('span');
-    const spanData = btnData.querySelector('span');
-    
-    const unselectedClasses = ['border-transparent', 'bg-slate-50', 'hover:bg-slate-100'];
-    const selectedClasses = ['border-smart-accent', 'bg-smart-accent/5', 'hover:bg-smart-accent/10'];
-
-    btnRobot.addEventListener('click', () => {
+      if (mode === 'robot') {
         btnRobot.classList.remove(...unselectedClasses);
         btnRobot.classList.add(...selectedClasses);
         spanRobot.classList.add('text-smart-accent');
         spanRobot.classList.remove('text-slate-700');
+        svgRobot.classList.add('text-smart-accent');
+        svgRobot.classList.remove('text-slate-500');
 
         btnData.classList.remove(...selectedClasses);
         btnData.classList.add(...unselectedClasses);
         spanData.classList.remove('text-smart-accent');
         spanData.classList.add('text-slate-700');
-    });
-
-    btnData.addEventListener('click', () => {
+        svgData.classList.remove('text-smart-accent');
+        svgData.classList.add('text-slate-500');
+      } else {
         btnData.classList.remove(...unselectedClasses);
         btnData.classList.add(...selectedClasses);
         spanData.classList.add('text-smart-accent');
         spanData.classList.remove('text-slate-700');
+        svgData.classList.add('text-smart-accent');
+        svgData.classList.remove('text-slate-500');
 
         btnRobot.classList.remove(...selectedClasses);
         btnRobot.classList.add(...unselectedClasses);
         spanRobot.classList.remove('text-smart-accent');
         spanRobot.classList.add('text-slate-700');
+        svgRobot.classList.remove('text-smart-accent');
+        svgRobot.classList.add('text-slate-500');
+      }
+    }
+
+    // Handle light toggle
+    document.getElementById('lightToggle').addEventListener('change', function(e) {
+      const label = document.getElementById('lightStatus');
+      const relayState = e.target.checked ? 'ON' : 'OFF';
+      label.textContent = e.target.checked ? 'Active' : 'Inactive';
+      
+      // Kirim ke MQTT
+      client.publish(topics.relay, relayState);
     });
 
-    // ========== PERIODIC CHECK ==========
+    // Dark mode toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+    
+    themeToggle.addEventListener('click', function() {
+      document.body.classList.toggle('dark');
+      themeIcon.textContent = document.body.classList.contains('dark') ? 'dark_mode' : 'light_mode';
+    });
+
+    // Auto refresh data (cadangan)
     setInterval(() => {
-        if (client.connected) {
-            client.publish(topics.ping, 'status_request');
-        }
+      if (client.connected) {
+        client.publish(topics.ping, 'status_request');
+      }
     }, 30000);
-</script>
+  </script>
+<!-- END: Interactive Logic -->
 </body>
 </html>
